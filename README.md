@@ -1,5 +1,5 @@
 # tbrg-qc
-Quality control process for tipping bucket rain gauge data
+R workflow to be applied to tipping bucket rain gauge data to flag suspect gauge tips that may be the result of gauge malfunction or snowmelt. 
 
 ## How to Contribute
 
