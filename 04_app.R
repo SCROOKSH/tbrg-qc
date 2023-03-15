@@ -13,7 +13,7 @@ library(viridisLite)
 library(viridis)
 
 # Load data
-load("../03_examine/df_wide.Rda")
+load("./03_examine/df_wide.Rda")
 
 # Define date limits
 slider1 <- min(as.Date(df_wide$Timestamp)-5)
