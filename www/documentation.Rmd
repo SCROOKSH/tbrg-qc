@@ -87,31 +87,32 @@ When you add _missing data periods_ to the Excel files in the **02_test4review**
 The table below explains the columns in the Excel files in the **02_test4review** folder.  
   
 <details>
-<summary>`forReview` table columns meaning (click to unfold) </summary>
+<summary> `forReview` table columns meaning (click to unfold) </summary>
   
 | Column name |  Meaning |
 |:------|:------------------------|  
 |Timestamp1       | Timestamp for rain tip. No replica for Campbell data.|
 |Rain_mm          | Original rain data from the logger in mm.|
 |Rain_C           | Reviewers put new rain values in this column. Put `-99` for **MissingPeriod** and add flags in the `flag_missing` column. |
+|flag_missing     |Indicating bucket malfunction. Each missing period should be a period with a row having a value of `m_start` and another row having a value of `m_end` (rows inbetween should flagged as `m`). When the missing flag is used, the `Rain_C` column value should be `-99`. The missing flags will be read from the threshold table automatically, and reviewers can add flags in this column manually.  |
 |flags            | A summary of all flags in this row.|
 |Temperature_hobo | Only HoBo data has this column. Temperature value read from HoBo logger. |
 |TimestampH       | Timestamp floored to the hour.|
 |Tair_Avg_C       | Air temperature read from the `Hourly Air Temperature` table. |
-|event2h          | Numbered rain event. Tips that happened 2 hours later are considered another rain event. |
+|event2h          | Numbered rain event. Tips that have a time gap more than 2 hours are considered as another rain event. |
 |gap              |Time gap between this tip and the previous one, in seconds. |
 |flag_tip         |Shown as flags `Y` when Campbell tip >=0.6 or HoBo tip is not equal to 0.254 |
 |flag_instantaneous| Within each event, flag when 2 tips have a tiny time gap that indicates hourly rain may exceed the instantaneous rain threshold. Falsely flagged for some HoBo data which have the same timestamp. |
-|gap_increase     |Within each event, flagged as `1` when the time gap increased and flagged as `0` for not increased  |
-|gap_ins_ct       |Numbers increase by 1 if the time gap kept increasing. Used for the `flag_prolong` column |
-|flag_prolong     |If the time gap between 2 tips have been increased for at least 12 times, they will be flagged as `prolong` |
-|i_hrmax          |Hourly sum rain value. Hour means clock time |
-|flag_hrmax       |Flagged as `hrmax` if the rain tips indicate that it will exceed hourly max threshold value  |
-|i_daymax         |Daily sum rain value. Day means calendar day |
-|flag_daymax      |Flagged as `daymax` if the rain tips indicate that it will exceed daily max threshold value  |
-|flag_SM4a        |Flagged as `SM4a` if temperature < 0   |
+|gap_increase     |Within each event, flagged as `1` when the time gap increased and flagged as `0` for not increased.  |
+|gap_ins_ct       |Numbers increase by 1 if the time gap kept increasing. Used for the `flag_prolong` column. |
+|flag_prolong     |If the time gap between 2 tips have been increased for at least 12 times, they will be flagged as `prolong`. |
+|i_hrmax          |Hourly sum rain value. Hour means clock time. |
+|flag_hrmax       |Flagged as `hrmax` if the rain tips indicate that it will exceed hourly max threshold value.  |
+|i_daymax         |Daily sum rain value. Day means calendar day. |
+|flag_daymax      |Flagged as `daymax` if the rain tips indicate that it will exceed daily max threshold value.  |
+|flag_below0      |Flagged as `below0` if temperature < 0.   |
 |flag_SM4         |If the temperature was ever < 0 during 00:00 ~ 15:00 and > 0 between 12:00 ~ 15:00, all tips in that day will be flagged as `SM4a`. |
-|flag_missing     |Indicating bucket malfunction. Each missing period should be a period with a row having a value of `m_start` and another row having a value of `m_end` (rows inbetween should flagged as `m`). When the missing flag is used, the `Rain_C` column value should be `-99`. The missing flags will be read from the threshold table automatically, and reviewers can add flags in this column manually.  |
+
 
   
 </details>

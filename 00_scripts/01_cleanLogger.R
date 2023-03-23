@@ -66,7 +66,7 @@ for (location_keyword_i in location_keyword) {
         rename_with(~"Timestamp", 1) %>%
         rename(Rain_mm = Tot) %>%
         select(Timestamp, Rain_mm) %>%
-        mutate(Timestamp1 = anytime(Timestamp)) %>%
+        mutate(Timestamp1 = parse_date_time(Timestamp, "%Y-%m-%d %H:%M:%S", tz = "Pacific/Pitcairn")) %>%
         arrange(Timestamp1) %>%
         distinct(Timestamp1, .keep_all = TRUE) %>% # Campbell. delete duplicated rows by Timestamp1
         filter(year(Timestamp1) == examineYear) %>%
@@ -101,25 +101,27 @@ for (location_keyword_i in location_keyword) {
       filter(str_detect(File, regex(location_keyword_i, ignore_case = TRUE)))
 
     AirTemperature <- map_dfr(.x = filelist$File, .f = read_excel) %>%
-      mutate(Timestamp1 = as.POSIXct(DateTime, format = "%Y-%m-%d %H:%M:%S", tz = "Pacific/Pitcairn")) %>%
+      mutate(Timestamp1 = parse_date_time(DateTime, "%Y-%m-%d %H:%M:%S", tz = "Pacific/Pitcairn")) %>%
       arrange(Timestamp1) %>%
       mutate(TimestampH = round(Timestamp1, units = "hours")) %>% # round not floor to hour
-      select(TimestampH, Tair_Avg_C)
+      select(TimestampH, Tair_Avg_C) %>%
+      distinct(TimestampH, .keep_all = TRUE) 
 
     AirTemperature_sm4 <- AirTemperature %>%
       mutate(
-        Hour = as.numeric(format(TimestampH, "%H")),
+        Hour = hour(TimestampH),
         date = as.Date(TimestampH)
       ) %>%
-      group_by(date = as.Date(TimestampH)) %>%
+      group_by(date) %>%
       mutate(
-        amT = ifelse(Hour >= 0 & Hour <= 15 & Tair_Avg_C <= 0, TRUE, FALSE), # 0 -15 am
-        pmT = ifelse(Hour >= 12 & Hour <= 15 & Tair_Avg_C > 0, TRUE, FALSE), # 12-15 pm
+        amT = any(Hour >= 0 & Hour <= 15 & Tair_Avg_C <= 0), # 0 -15 am
+        pmT = any(Hour >= 12 & Hour <= 15 & Tair_Avg_C > 0), # 12-15 pm
         flag_SM4 = ifelse(amT & pmT, "SM4", NA)
       ) %>%
       ungroup() %>%
       select(date, flag_SM4) %>%
-      filter(!is.na(flag_SM4))
+      filter(!is.na(flag_SM4)) %>%
+      distinct(date, .keep_all = TRUE)
 
 
     # 2. run test --------------------------------------------------------------
@@ -155,7 +157,7 @@ for (location_keyword_i in location_keyword) {
       mutate(
         gap = as.numeric(Timestamp1 - lag(Timestamp1), units = "secs"),
         event2h = cumsum(c(1, diff(Timestamp1) > 2 * 60 * 60))
-      ) %>% # time gaps more than 2 hours will be a new event number, start 1
+      ) %>% # time gaps more than 2 hours will be a new event number, start with '1'
       group_by(event2h) %>%
       mutate(
         flag_instantaneous = ifelse(gap < ins_gap, "instantaneous", NA), # used to be "QC1a"
@@ -177,7 +179,7 @@ for (location_keyword_i in location_keyword) {
       ) %>%
       ungroup() %>%
       group_by(floor_day) %>%
-      mutate(flag_SM4a = ifelse(Tair_Avg_C <= 0, "SM4a", NA)) %>%
+      mutate(flag_below0 = ifelse(Tair_Avg_C <= 0, "below0", NA)) %>%
       ungroup() %>%
       mutate(Rain_C = "") %>%
       select(-c(Hour, floor_hour, floor_day)) %>%
@@ -195,12 +197,13 @@ for (location_keyword_i in location_keyword) {
     data_mytest1$`flag_missing`[missing_end] <- "m_end"
 
     data_mytest1 <- data_mytest1 %>%
-      mutate(Rain_C = ifelse(!is.na(flag_missing), -99, "")) %>% # new end migging flag
+      mutate(Rain_C = ifelse(!is.na(flag_missing), -99, "")) %>% # new end missing flag
       unite(flags, starts_with("flag"), na.rm = T, sep = ",", remove = F) %>%
       relocate(Rain_C, .after = Rain_mm) %>%
       relocate(event2h, .after = Tair_Avg_C) %>%
       relocate(flag_tip, .before = flag_instantaneous) %>%
-      relocate(flags, .after = Rain_C)
+      relocate(flags, .after = Rain_C) %>%
+      relocate(`flag_missing`, .after = Rain_C)
 
 
     ## 2.4 summarise table by day ----------------------------------------------
@@ -208,16 +211,19 @@ for (location_keyword_i in location_keyword) {
       group_by(date = as.Date(Timestamp1)) %>%
       summarize(
         Rain_day = sum(Rain_mm),
+        flag_missing = ifelse(any(is.na(flag_missing)), NA, "Missing"),
         flag_tip = ifelse(any(flag_tip == "Y"), "Y", NA),
         flag_instantaneous = ifelse(any(flag_instantaneous == "instantaneous"), "instantaneous", NA),
         flag_prolong = ifelse(any(flag_prolong == "prolong"), "prolong", NA),
         flag_hrmax = ifelse(any(flag_hrmax == "hrmax"), "hrmax", NA),
         flag_daymax = ifelse(any(flag_daymax == "daymax"), "daymax", NA),
         flag_SM4 = ifelse(any(flag_SM4 == "SM4"), "SM4", NA),
-        flag_SM4a = ifelse(any(flag_SM4a == "SM4a"), "SM4a", NA)
+        flag_below0 = ifelse(any(flag_below0 == "below0"), "below0", NA)
       ) %>%
       arrange(date) %>%
-      mutate(days_dry = as.numeric(date - lag(date, default = first(date))) + 1)
+      mutate(days_dry = as.numeric(date - lag(date, default = first(date))) + 1) %>%
+      unite(flags, starts_with("flag"), na.rm = T, sep = ",", remove = F) %>%
+      relocate(flags, .after = Rain_day)
 
 
     ## 2.5 print excel for data review -----------------------------------------

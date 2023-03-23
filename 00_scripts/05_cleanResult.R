@@ -39,9 +39,9 @@ threshold_examine <- read_excel("01_input/threshold_value.xlsx", sheet = "examin
 # 1. Generate seconds and timestamp column for entire year ----------------------
 yearStart <- as.POSIXct(paste0(as.numeric(examineYear) - 1, "-12-31 00:00:00"), format = "%Y-%m-%d %H:%M:%S", tz = "Pacific/Pitcairn")
 yearEnd <- as.POSIXct(paste0(as.numeric(examineYear) + 1, "-01-01 23:00:00"), format = "%Y-%m-%d %H:%M:%S", tz = "Pacific/Pitcairn")
-year_hour <- data.frame(TimestampH = seq(yearStart, yearEnd, by = "1 hour")) %>% filter(year(TimestampH) == examineYear)
+year_hour <- data.frame(DateTimeH = seq(yearStart, yearEnd, by = "1 hour")) %>% filter(year(DateTimeH) == examineYear)
 year_day <- data.frame(Date = seq(yearStart, yearEnd, by = "1 day")) %>% filter(year(Date) == examineYear)
-year_minu5 <- data.frame(Minu5 = seq(yearStart, yearEnd, by = "5 mins")) %>% filter(year(Minu5) == examineYear)
+year_DateTimeM <- data.frame(DateTimeM = seq(yearStart, yearEnd, by = "5 mins")) %>% filter(year(DateTimeM) == examineYear)
 
 # list all excel files in folder "02_test4review", exclude any opening excel start with ~ (please )
 filelist <- list.files(path = reviewfolder, pattern = "^[^~].*\\.xlsx$", full.names = TRUE)
@@ -131,15 +131,16 @@ for (location_keyword_i in location_keyword) {
     ## 2.3 make data table for each timestep -----------------------------------
     
     df_hour <- df_seq %>%
-      group_by(TimestampH = floor_date(Timestamp, "hour")) %>%
+      group_by(DateTimeH = floor_date(Timestamp, "hour")) %>%
       summarise(Rain_hour = sum(Rain)) %>%
       mutate(Grade = case_when(
         is.na(Rain_hour) ~ "Missing",
         !is.na(Rain_hour) ~ "Record"
       )) %>%
-      right_join(year_hour, by = "TimestampH") %>%
-      mutate(Grade = ifelse(is.na(Grade), "Winter", Grade)) %>%
-      arrange(TimestampH)
+      right_join(year_hour, by = "DateTimeH") %>%
+      mutate(Grade = ifelse(is.na(Grade), "Winter", Grade),
+             Rain_hour = ifelse(Grade == "Missing", "NA", Rain_hour)) %>%
+      arrange(DateTimeH)
 
     df_day <- df_seq %>%
       group_by(Date = as.Date(Timestamp)) %>%
@@ -149,27 +150,30 @@ for (location_keyword_i in location_keyword) {
         !is.na(Rain_day) ~ "Record"
       )) %>%
       right_join(year_day, by = "Date") %>%
-      mutate(Grade = ifelse(is.na(Grade), "Winter", Grade)) %>%
+      mutate(Grade = ifelse(is.na(Grade), "Winter", Grade),
+             Rain_day = ifelse(Grade == "Missing", "NA", Rain_day)) %>%
       arrange(Date)
 
-    df_minu5 <- df_seq %>%
-      group_by(Minu5 = floor_date(Timestamp, "5 minutes")) %>%
-      summarise(Rain_minu5 = sum(Rain)) %>%
+    df_DateTimeM <- df_seq %>%
+      group_by(DateTimeM = floor_date(Timestamp, "5 minutes")) %>%
+      summarise(Rain_DateTimeM = sum(Rain)) %>%
       mutate(Grade = case_when(
-        is.na(Rain_minu5) ~ "Missing",
-        !is.na(Rain_minu5) ~ "Record"
+        is.na(Rain_DateTimeM) ~ "Missing",
+        !is.na(Rain_DateTimeM) ~ "Record"
       )) %>%
-      right_join(year_minu5, by = "Minu5") %>%
-      mutate(Grade = ifelse(is.na(Grade), "Winter", Grade)) %>%
-      arrange(Minu5)
+      right_join(year_DateTimeM, by = "DateTimeM") %>%
+      mutate(Grade = ifelse(is.na(Grade), "Winter", Grade),
+             Rain_DateTimeM = ifelse(Grade == "Missing", "NA", Rain_DateTimeM)) %>%
+      arrange(DateTimeM) 
+      
 
     ## 2.4 print result --------------------------------------------------------
     
     write_xlsx(
       list(
-        Hour = df_hour %>% mutate(TimestampH = as.character(TimestampH)),
+        Hour = df_hour %>% mutate(DateTimeH = as.character(DateTimeH)),
         Day = df_day %>% mutate(Date = as.character(Date)),
-        Minute5 = df_minu5 %>% mutate(Minu5 = as.character(Minu5))
+        Minute5 = df_DateTimeM %>% mutate(DateTimeM = as.character(DateTimeM))
       ),
       col_names = TRUE,
       paste0("05_cleanResult/clean_", cleanName)

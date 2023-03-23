@@ -10,7 +10,7 @@
 
 
 
-<meta name="date" content="2023-03-15" />
+<meta name="date" content="2023-03-23" />
 
 <title>Tipping Bucket Rain Gauge - Quality Assurance/Quality Control (QA/QC) System Documentation</title>
 
@@ -1481,7 +1481,7 @@ border-radius: 0px;
 
 <h1 class="title toc-ignore">Tipping Bucket Rain Gauge - Quality
 Assurance/Quality Control (QA/QC) System Documentation</h1>
-<h4 class="date">2023-03-15</h4>
+<h4 class="date">2023-03-23</h4>
 
 </div>
 
@@ -1683,89 +1683,6 @@ data.</td>
 <code>flag_missing</code> column.</td>
 </tr>
 <tr class="even">
-<td align="left">flags</td>
-<td align="left">A summary of all flags in this row.</td>
-</tr>
-<tr class="odd">
-<td align="left">Temperature_hobo</td>
-<td align="left">Only HoBo data has this column. Temperature value read
-from HoBo logger.</td>
-</tr>
-<tr class="even">
-<td align="left">TimestampH</td>
-<td align="left">Timestamp floored to the hour.</td>
-</tr>
-<tr class="odd">
-<td align="left">Tair_Avg_C</td>
-<td align="left">Air temperature read from the
-<code>Hourly Air Temperature</code> table.</td>
-</tr>
-<tr class="even">
-<td align="left">event2h</td>
-<td align="left">Numbered rain event. Tips that happened 2 hours later
-are considered another rain event.</td>
-</tr>
-<tr class="odd">
-<td align="left">gap</td>
-<td align="left">Time gap between this tip and the previous one, in
-seconds.</td>
-</tr>
-<tr class="even">
-<td align="left">flag_tip</td>
-<td align="left">Shown as flags <code>Y</code> when Campbell tip
-&gt;=0.6 or HoBo tip is not equal to 0.254</td>
-</tr>
-<tr class="odd">
-<td align="left">flag_instantaneous</td>
-<td align="left">Within each event, flag when 2 tips have a tiny time
-gap that indicates hourly rain may exceed the instantaneous rain
-threshold. Falsely flagged for some HoBo data which have the same
-timestamp.</td>
-</tr>
-<tr class="even">
-<td align="left">gap_increase</td>
-<td align="left">Within each event, flagged as <code>1</code> when the
-time gap increased and flagged as <code>0</code> for not increased</td>
-</tr>
-<tr class="odd">
-<td align="left">gap_ins_ct</td>
-<td align="left">Numbers increase by 1 if the time gap kept increasing.
-Used for the <code>flag_prolong</code> column</td>
-</tr>
-<tr class="even">
-<td align="left">flag_prolong</td>
-<td align="left">If the time gap between 2 tips have been increased for
-at least 12 times, they will be flagged as <code>prolong</code></td>
-</tr>
-<tr class="odd">
-<td align="left">i_hrmax</td>
-<td align="left">Hourly sum rain value. Hour means clock time</td>
-</tr>
-<tr class="even">
-<td align="left">flag_hrmax</td>
-<td align="left">Flagged as <code>hrmax</code> if the rain tips indicate
-that it will exceed hourly max threshold value</td>
-</tr>
-<tr class="odd">
-<td align="left">i_daymax</td>
-<td align="left">Daily sum rain value. Day means calendar day</td>
-</tr>
-<tr class="even">
-<td align="left">flag_daymax</td>
-<td align="left">Flagged as <code>daymax</code> if the rain tips
-indicate that it will exceed daily max threshold value</td>
-</tr>
-<tr class="odd">
-<td align="left">flag_SM4a</td>
-<td align="left">Flagged as <code>SM4a</code> if temperature &lt; 0</td>
-</tr>
-<tr class="even">
-<td align="left">flag_SM4</td>
-<td align="left">If the temperature was ever &lt; 0 during 00:00 ~ 15:00
-and &gt; 0 between 12:00 ~ 15:00, all tips in that day will be flagged
-as <code>SM4a</code>.</td>
-</tr>
-<tr class="odd">
 <td align="left">flag_missing</td>
 <td align="left">Indicating bucket malfunction. Each missing period
 should be a period with a row having a value of <code>m_start</code> and
@@ -1774,6 +1691,90 @@ flagged as <code>m</code>). When the missing flag is used, the
 <code>Rain_C</code> column value should be <code>-99</code>. The missing
 flags will be read from the threshold table automatically, and reviewers
 can add flags in this column manually.</td>
+</tr>
+<tr class="odd">
+<td align="left">flags</td>
+<td align="left">A summary of all flags in this row.</td>
+</tr>
+<tr class="even">
+<td align="left">Temperature_hobo</td>
+<td align="left">Only HoBo data has this column. Temperature value read
+from HoBo logger.</td>
+</tr>
+<tr class="odd">
+<td align="left">TimestampH</td>
+<td align="left">Timestamp floored to the hour.</td>
+</tr>
+<tr class="even">
+<td align="left">Tair_Avg_C</td>
+<td align="left">Air temperature read from the
+<code>Hourly Air Temperature</code> table.</td>
+</tr>
+<tr class="odd">
+<td align="left">event2h</td>
+<td align="left">Numbered rain event. Tips that have a time gap more
+than 2 hours are considered as another rain event.</td>
+</tr>
+<tr class="even">
+<td align="left">gap</td>
+<td align="left">Time gap between this tip and the previous one, in
+seconds.</td>
+</tr>
+<tr class="odd">
+<td align="left">flag_tip</td>
+<td align="left">Shown as flags <code>Y</code> when Campbell tip
+&gt;=0.6 or HoBo tip is not equal to 0.254</td>
+</tr>
+<tr class="even">
+<td align="left">flag_instantaneous</td>
+<td align="left">Within each event, flag when 2 tips have a tiny time
+gap that indicates hourly rain may exceed the instantaneous rain
+threshold. Falsely flagged for some HoBo data which have the same
+timestamp.</td>
+</tr>
+<tr class="odd">
+<td align="left">gap_increase</td>
+<td align="left">Within each event, flagged as <code>1</code> when the
+time gap increased and flagged as <code>0</code> for not increased.</td>
+</tr>
+<tr class="even">
+<td align="left">gap_ins_ct</td>
+<td align="left">Numbers increase by 1 if the time gap kept increasing.
+Used for the <code>flag_prolong</code> column.</td>
+</tr>
+<tr class="odd">
+<td align="left">flag_prolong</td>
+<td align="left">If the time gap between 2 tips have been increased for
+at least 12 times, they will be flagged as <code>prolong</code>.</td>
+</tr>
+<tr class="even">
+<td align="left">i_hrmax</td>
+<td align="left">Hourly sum rain value. Hour means clock time.</td>
+</tr>
+<tr class="odd">
+<td align="left">flag_hrmax</td>
+<td align="left">Flagged as <code>hrmax</code> if the rain tips indicate
+that it will exceed hourly max threshold value.</td>
+</tr>
+<tr class="even">
+<td align="left">i_daymax</td>
+<td align="left">Daily sum rain value. Day means calendar day.</td>
+</tr>
+<tr class="odd">
+<td align="left">flag_daymax</td>
+<td align="left">Flagged as <code>daymax</code> if the rain tips
+indicate that it will exceed daily max threshold value.</td>
+</tr>
+<tr class="even">
+<td align="left">flag_below0</td>
+<td align="left">Flagged as <code>below0</code> if temperature &lt;
+0.</td>
+</tr>
+<tr class="odd">
+<td align="left">flag_SM4</td>
+<td align="left">If the temperature was ever &lt; 0 during 00:00 ~ 15:00
+and &gt; 0 between 12:00 ~ 15:00, all tips in that day will be flagged
+as <code>SM4a</code>.</td>
 </tr>
 </tbody>
 </table>
