@@ -40,7 +40,7 @@ ui <- navbarPage(title = "Tipping rain budget data QAQC", theme = "spacelab",
                  ),
                  tabPanel(title = "Documentation",
                  fluidPage(
-                   tags$iframe(src = './documentation.html',         # put myMarkdown.html to ~/www/
+                   tags$iframe(src = './documentation.html',                    # put myMarkdown.html to ~/www/
                                width = '100%', height = '854px', 
                                frameborder = 0, scrolling = 'auto'
                    )
