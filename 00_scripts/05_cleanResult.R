@@ -5,8 +5,8 @@
 #   and generates a new table for each location-datatype. Outputs are put in the "05_cleanResult" folder
 # Each output excel has 3 sheets: Day, Hour, and 5 minutes. Each sheet has 3 columns: timestamp, Rain, Grade
 
-# Version: 0.1
-# Last update: 2023-03-13
+# Version: 0.2
+# Last update: 2023-03-24
 
 
 
@@ -20,16 +20,13 @@ library(tidyverse)
 
 
 # 0. Users settings - please check every year ----------------------------------
-examineYear <- "2022"
+threshold_value <- read_excel("01_input/threshold.xlsx", sheet = "extreme") %>%   # each row in col "Test" must have unique values
+  column_to_rownames(var = "Test")
+examineYear <- threshold_value["examineYear", "Value"]   
+
 reviewfolder <- "02_test4review"
 
-location_keyword <- c("Burn", "Cabin", "Seed")                                  # location_keyword and data_type should match.
-data_type <- c("Campbell", "HoBo")        
-# if Seed has 2 Campbell, modify line 26 to 2 locations, run. Then rerun this script with below setting
-# location_keyword <- c("Seed")  
-# data_type <- c("Campbell1", "Campbell2")  
-
-threshold_examine <- read_excel("01_input/threshold_value.xlsx", sheet = "examine") %>% 
+threshold_examine <- read_excel("01_input/threshold.xlsx", sheet = "examine") %>% 
   column_to_rownames(var = "Data") %>%
   mutate(
     examinestart = parse_date_time(examinestart, "%Y-%m-%d %H:%M:%S", tz = "Pacific/Pitcairn"),
@@ -49,14 +46,15 @@ filelist <- list.files(path = reviewfolder, pattern = "^[^~].*\\.xlsx$", full.na
 
 # 2. Loop locations and each data_type -----------------------------------------
 
-for (location_keyword_i in location_keyword) { 
-  for (data_type_i in data_type) { 
 
-    pattern <- sprintf(".*%s.*%s.*\\.xlsx", location_keyword_i, data_type_i)
-    file_i <- grep(pattern, filelist, value = TRUE)
+for (file_i in filelist){
+
     cleanName <- basename(file_i) %>% str_remove("forReview_")
-    examinestart <- threshold_examine[paste0(location_keyword_i, "_", data_type_i), "examinestart"]
-    examineend <- threshold_examine[paste0(location_keyword_i, "_", data_type_i), "examineend"]
+    location_i <- str_extract(file_i, "(?<=_)[[:alpha:]]+(?=\\d{4})")
+    data_type_i <- str_extract(file_i, "(?<=\\d{4}).*(?=\\.xlsx$)")
+      
+    examinestart <- threshold_examine[paste0(location_i, "_", data_type_i), "examinestart"]
+    examineend <- threshold_examine[paste0(location_i, "_", data_type_i), "examineend"]
 
     ## 2.1 read in the excel table ---------------------------------------------
     
@@ -70,7 +68,7 @@ for (location_keyword_i in location_keyword) {
       drop_na(Timestamp)
 
     # if it's HoBo data, need to add random seconds to the timestamp
-    if (data_type_i == "HoBo") {
+    if (grepl("HoBo", data_type_i)) {
       # find replica rows
       not_re_df <- df %>%
         group_by(Timestamp) %>%
@@ -139,7 +137,8 @@ for (location_keyword_i in location_keyword) {
       )) %>%
       right_join(year_hour, by = "DateTimeH") %>%
       mutate(Grade = ifelse(is.na(Grade), "Winter", Grade),
-             Rain_hour = ifelse(Grade == "Missing", "NA", Rain_hour)) %>%
+             Rain_hour = ifelse(Grade == "Missing", "NA", Rain_hour),
+             Rain_hour = ifelse(Grade == "Winter", "NA", Rain_hour)) %>%
       arrange(DateTimeH)
 
     df_day <- df_seq %>%
@@ -151,7 +150,8 @@ for (location_keyword_i in location_keyword) {
       )) %>%
       right_join(year_day, by = "Date") %>%
       mutate(Grade = ifelse(is.na(Grade), "Winter", Grade),
-             Rain_day = ifelse(Grade == "Missing", "NA", Rain_day)) %>%
+             Rain_day = ifelse(Grade == "Missing", "NA", Rain_day),
+             Rain_day = ifelse(Grade == "Winter", "NA", Rain_day)) %>%
       arrange(Date)
 
     df_DateTimeM <- df_seq %>%
@@ -163,7 +163,8 @@ for (location_keyword_i in location_keyword) {
       )) %>%
       right_join(year_DateTimeM, by = "DateTimeM") %>%
       mutate(Grade = ifelse(is.na(Grade), "Winter", Grade),
-             Rain_DateTimeM = ifelse(Grade == "Missing", "NA", Rain_DateTimeM)) %>%
+             Rain_DateTimeM = ifelse(Grade == "Missing", "NA", Rain_DateTimeM),
+             Rain_DateTimeM = ifelse(Grade == "Winter", "NA", Rain_DateTimeM)) %>%
       arrange(DateTimeM) 
       
 
@@ -178,6 +179,6 @@ for (location_keyword_i in location_keyword) {
       col_names = TRUE,
       paste0("05_cleanResult/clean_", cleanName)
     )
-  } # end of data_type
-} # end of locations
+  } 
+
 

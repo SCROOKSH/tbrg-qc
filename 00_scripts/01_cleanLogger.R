@@ -6,8 +6,8 @@
 #   - run tests on the cleaned event data
 #   - export the tipping bucket event data with QA test results to the 02_test4review folder
 
-# Version: 0.1
-# Last update: 2023-03-13
+# Version: 0.2
+# Last update: 2023-03-24
 
 
 
@@ -20,132 +20,132 @@ library(tidyverse)
 library(stringr)
 library(writexl)
 library(zoo)
-library(anytime)
-source("00_scripts/functions.R") # important, must run
+source("00_scripts/functions.R")                                                # important, must run
 
-# 0. Users settings - please check every year ----------------------------------
-examineYear <- "2022"
+# 0. Users settings - please check threshold.xlsx every year -------------------
 
-datafolder <- c(
-  "01_input/Raw Campbell Scientific Files/", # one folder must have keyword "Campbell" (or same as data_type[1])
-  "01_input/Raw HoBo Files/", # one folder must have keyword "HoBo" (or same as data_type[2])
-  "01_input/Hourly Air Temperature/"
-) # last one folder must have keyword "Temperature"
-
-threshold_value <- read_excel("01_input/threshold_value.xlsx", sheet = "extreme") %>% # each row in col "Test" must have unique values
+threshold_value <- read_excel("01_input/threshold.xlsx", sheet = "extreme") %>%   # each row in col "Test" must have unique values
   column_to_rownames(var = "Test")
-threshold_examine <- read_excel("01_input/threshold_value.xlsx", sheet = "examine") %>% # col Data is unique rownames
+
+examineYear <- threshold_value["examineYear", "Value"]                          # examine year read from threshold table now
+
+threshold_examine <- read_excel("01_input/threshold.xlsx", sheet = "examine") %>% # col Data is unique rownames
   column_to_rownames(var = "Data") %>%
   mutate(
     examinestart = parse_date_time(examinestart, "%Y-%m-%d %H:%M:%S", tz = "Pacific/Pitcairn"),
     examineend = parse_date_time(examineend, "%Y-%m-%d %H:%M:%S", tz = "Pacific/Pitcairn")
   )
-threshold_missing <- read_excel("01_input/threshold_value.xlsx", sheet = "missing") %>%
+threshold_missing <- read_excel("01_input/threshold.xlsx", sheet = "missing") %>%
   mutate(
     m_start = parse_date_time(m_start, "%Y-%m-%d %H:%M:%S", tz = "Pacific/Pitcairn"),
     m_end = parse_date_time(m_end, "%Y-%m-%d %H:%M:%S", tz = "Pacific/Pitcairn")
   )
 
-location_keyword <- c("Burn", "Cabin", "Seed") # in each folder, data file name must have location keyword "Burn" or "Cabin" or "Seed"
-data_type <- c("Campbell", "HoBo") # subfolders under 01_input should have these data_type keywords. All data in each subfolder will be cleaned to one excel
-
+location_dir <- "01_input" %>%
+  list.dirs(recursive = FALSE)
 
 
 # 1. loop location -------------------------------------------------------------
-for (location_keyword_i in location_keyword) {
-  for (data_type_i in data_type) {
-    data_folder_i <- datafolder[grep(data_type_i, datafolder)]
 
-    filelist <- data.frame(File = list.files(path = data_folder_i, full.names = TRUE)) %>%
-      filter(str_detect(File, regex(location_keyword_i, ignore_case = TRUE)))
+for (location_dir_i in location_dir) {                                          # e.g.   location_dir_i  <- "01_input/Burn"
+  location_i <- basename(location_dir_i)                                        # e.g.   location_i      <- "Burn"
+  data_type_dir <- location_dir_i %>% list.dirs(recursive = FALSE)              # e.g.   data_type_dir   <- "01_input/Burn/Campbell" all suborders
 
-    ## 1.2  Campbell data process ----------------------------------------------
 
-    if (str_detect(data_folder_i, regex("Campbell", ignore_case = TRUE))) {
-      data_mytest <- map_dfr(.x = filelist$File, .f = readin_campbell) %>%
+  ## 1.1 hourly air temperature process ----------------------------------------
+
+  filelist <- list.files(path = location_dir_i, full.names = TRUE, recursive = FALSE) %>%
+    keep(~ grepl(".xlsx$", .))
+  AirTemperature <- map_dfr(.x = filelist, .f = read_excel) %>%
+    mutate(Timestamp1 = parse_date_time(DateTime, "%Y-%m-%d %H:%M:%S", tz = "Pacific/Pitcairn")) %>%
+    arrange(Timestamp1) %>%
+    mutate(TimestampH = round(Timestamp1, units = "hours")) %>% # round not floor to hour
+    select(TimestampH, Tair_Avg_C) %>%
+    distinct(TimestampH, .keep_all = TRUE)
+  AirTemperature_sm4 <- AirTemperature %>%
+    mutate(
+      Hour = hour(TimestampH),
+      date = as.Date(TimestampH)
+    ) %>%
+    group_by(date) %>%
+    mutate(
+      amT = any(Hour >= 0 & Hour <= 15 & Tair_Avg_C <= 0), # 0 -15 am
+      pmT = any(Hour >= 12 & Hour <= 15 & Tair_Avg_C > 0), # 12-15 pm
+      flag_SM4 = ifelse(amT & pmT, "SM4", NA)
+    ) %>%
+    ungroup() %>%
+    select(date, flag_SM4) %>%
+    filter(!is.na(flag_SM4)) %>%
+    distinct(date, .keep_all = TRUE)
+
+
+  ## 1.2 loop data type folders ------------------------------------------------
+
+  for (data_type_dir_i in data_type_dir) {                                      # data_type_dir_i  <-  "01_input/Burn/Campbell"
+
+    data_type_nicename <- basename(data_type_dir_i)                             # data_type_nicename <- "Campbell"
+    filelist <- list.files(path = data_type_dir_i, full.names = TRUE)           # all file from one bucket
+
+    ### 1.2.1  Campbell data process ------------------------------------------
+
+    if (str_detect(data_type_nicename, regex("Campbell", ignore_case = TRUE))) {
+      data_mytest <- map_dfr(.x = filelist, .f = readin_campbell) %>%
         rename_with(~"Timestamp", 1) %>%
         rename(Rain_mm = Tot) %>%
         select(Timestamp, Rain_mm) %>%
         mutate(Timestamp1 = parse_date_time(Timestamp, "%Y-%m-%d %H:%M:%S", tz = "Pacific/Pitcairn")) %>%
         arrange(Timestamp1) %>%
-        distinct(Timestamp1, .keep_all = TRUE) %>% # Campbell. delete duplicated rows by Timestamp1
+        distinct(Timestamp1, .keep_all = TRUE) %>%                              # Campbell. delete duplicated rows by Timestamp1
         filter(year(Timestamp1) == examineYear) %>%
         select(Timestamp1, Rain_mm) %>%
-        mutate(flag_tip = ifelse(Rain_mm >= 0.6, "Y", NA)) # flag_tip: value can not >= 0.6mm for Campbell data
+        mutate(flag_tip = ifelse(Rain_mm >= 0.6, "Y", NA))                      # flag_tip: value can not >= 0.6mm for Campbell data
 
       ins_gap <- 0.2 * 3600 / threshold_value["ins", "Value"]
-    } else if (str_detect(data_folder_i, regex("HoBo", ignore_case = TRUE))) {
-      ## 1.3 HoBo data process -------------------------------------------------
+    } else if (str_detect(data_type_nicename, regex("HoBo", ignore_case = TRUE))) {
+      
+    ### 1.2.2 HoBo data process -------------------------------------------------
 
-      data_mytest <- map_dfr(.x = filelist$File, .f = readin_hobo) %>%
+      data_mytest <- map_dfr(.x = filelist, .f = readin_hobo) %>%
         mutate(Timestamp1 = parse_date_time(Timestamp, "%m/%d/%Y %H:%M", tz = "Pacific/Pitcairn")) %>% # hobo doesn't have seconds in timestamp
         arrange(Timestamp1) %>%
         filter(year(Timestamp1) == examineYear) %>%
         fill(Temperature_C) %>%
         rename(Temperature_hobo = Temperature_C) %>%
-        mutate(`Rain_mm` = ifelse(is.na(`Event`), NA, 0.254)) %>% # add value 0.254 to each event row
+        mutate(`Rain_mm` = ifelse(is.na(`Event`), NA, 0.254)) %>%               # add value 0.254 to each event row
         drop_na(Rain_mm) %>%
         select(Timestamp1, Rain_mm, Temperature_hobo) %>%
         mutate(flag_tip = ifelse(Rain_mm == 0.254, NA, "Y"))
 
       ins_gap <- 0.254 * 3600 / threshold_value["ins", "Value"]
-    } else {
-      warning("Please check is datafolder names have keywords have 'Campbell' or 'HoBo'.")
+   
+       } else {
+      warning("Datafolder name must have the keyword 'Campbell' or 'HoBo'.")
     }
-
-
-    ## 1.4 hourly air temperature process --------------------------------------
-
-    # only read columns: DateTime, Tair_Avg_C. Then filter to days fits SM4 test
-    filelist <- data.frame(File = list.files(path = datafolder[3], full.names = TRUE)) %>%
-      filter(str_detect(File, regex(location_keyword_i, ignore_case = TRUE)))
-
-    AirTemperature <- map_dfr(.x = filelist$File, .f = read_excel) %>%
-      mutate(Timestamp1 = parse_date_time(DateTime, "%Y-%m-%d %H:%M:%S", tz = "Pacific/Pitcairn")) %>%
-      arrange(Timestamp1) %>%
-      mutate(TimestampH = round(Timestamp1, units = "hours")) %>% # round not floor to hour
-      select(TimestampH, Tair_Avg_C) %>%
-      distinct(TimestampH, .keep_all = TRUE) 
-
-    AirTemperature_sm4 <- AirTemperature %>%
-      mutate(
-        Hour = hour(TimestampH),
-        date = as.Date(TimestampH)
-      ) %>%
-      group_by(date) %>%
-      mutate(
-        amT = any(Hour >= 0 & Hour <= 15 & Tair_Avg_C <= 0), # 0 -15 am
-        pmT = any(Hour >= 12 & Hour <= 15 & Tair_Avg_C > 0), # 12-15 pm
-        flag_SM4 = ifelse(amT & pmT, "SM4", NA)
-      ) %>%
-      ungroup() %>%
-      select(date, flag_SM4) %>%
-      filter(!is.na(flag_SM4)) %>%
-      distinct(date, .keep_all = TRUE)
 
 
     # 2. run test --------------------------------------------------------------
 
     ## 2.1 delete winter readings ----------------------------------------------
 
-    examinestart <- threshold_examine[paste0(location_keyword_i, "_", data_type_i), "examinestart"]
-    examineend <- threshold_examine[paste0(location_keyword_i, "_", data_type_i), "examineend"]
+    examinestart <- threshold_examine[paste0(location_i, "_", data_type_nicename), "examinestart"]
+    examineend <- threshold_examine[paste0(location_i, "_", data_type_nicename), "examineend"]
 
     data_mytest <- data_mytest %>%
       filter(between(Timestamp1, examinestart, examineend))
 
-    # read missing table for this location
+    # read missing table for this location 
     missingTable <- threshold_missing %>%
-      filter(Data == paste0(location_keyword_i, "_", data_type_i)) %>%
-      select(m_start, m_end) %>%
+      filter(Data == paste0(location_i, "_", data_type_nicename)) %>%
+      select(`m_start`, `m_end`) %>%
+      mutate(m_end = m_end + days(1) - seconds(1)) %>%
       pivot_longer(
         cols = c("m_start", "m_end"),
         names_to = "flag_missing",
         values_to = "Timestamp1"
       ) %>%
-      select(Timestamp1, flag_missing)
-
-
+      select(Timestamp1, flag_missing) %>%
+      mutate(Timestamp1 = parse_date_time(Timestamp1, "%Y-%m-%d %H:%M:%S", tz = "Pacific/Pitcairn"))
+    
     ## 2.2 other tests ---------------------------------------------------------
 
     data_mytest1 <- data_mytest %>%
@@ -157,10 +157,10 @@ for (location_keyword_i in location_keyword) {
       mutate(
         gap = as.numeric(Timestamp1 - lag(Timestamp1), units = "secs"),
         event2h = cumsum(c(1, diff(Timestamp1) > 2 * 60 * 60))
-      ) %>% # time gaps more than 2 hours will be a new event number, start with '1'
+      ) %>%                                                                     # time gaps more than 2 hours will be a new event number, start with '1'
       group_by(event2h) %>%
       mutate(
-        flag_instantaneous = ifelse(gap < ins_gap, "instantaneous", NA), # used to be "QC1a"
+        flag_instantaneous = ifelse(gap < ins_gap, "instantaneous", NA),        # used to be "QC1a"
         gap_increase = ifelse(gap > lag(gap), 1, 0),
         gap_ins_ct = rollapply(gap_increase, 12, sum, fill = 0, align = "right"),
         flag_prolong = ifelse(gap_ins_ct >= 12, "prolong", NA)
@@ -186,8 +186,9 @@ for (location_keyword_i in location_keyword) {
       mutate(date = as.Date(Timestamp1)) %>%
       left_join(AirTemperature_sm4, by = "date") %>%
       select(-`date`) %>%
-      full_join(missingTable, by = "Timestamp1") %>% # new
+      full_join(missingTable, by = "Timestamp1") %>%
       arrange(Timestamp1)
+    
 
     ## 2.3 add all missing flags -----------------------------------------------
     missing_start <- which(data_mytest1$`flag_missing` == "m_start")
@@ -197,7 +198,7 @@ for (location_keyword_i in location_keyword) {
     data_mytest1$`flag_missing`[missing_end] <- "m_end"
 
     data_mytest1 <- data_mytest1 %>%
-      mutate(Rain_C = ifelse(!is.na(flag_missing), -99, "")) %>% # new end missing flag
+      mutate(Rain_C = ifelse(!is.na(flag_missing), -99, "")) %>%                # new end missing flag
       unite(flags, starts_with("flag"), na.rm = T, sep = ",", remove = F) %>%
       relocate(Rain_C, .after = Rain_mm) %>%
       relocate(event2h, .after = Tair_Avg_C) %>%
@@ -234,8 +235,8 @@ for (location_keyword_i in location_keyword) {
         daytable = data_daytable
       ),
       col_names = TRUE,
-      paste0("02_test4review/forReview_", location_keyword_i, examineYear, data_type_i, ".xlsx")
+      paste0("02_test4review/forReview_", location_i, examineYear, data_type_nicename, ".xlsx")
     )
-  } # end of loop Campbell or HoBo
+  } # end of loop data_type Campbell or HoBo
 } # end of loop locations
 

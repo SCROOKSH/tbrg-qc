@@ -5,8 +5,8 @@
 # - Read in tables from folder "02_test4review"
 # - Generate (1) 3 html reports in the "03_examine" folder and (2) a dataset "03_examine/df_wide.Rda" which is needed for "04_app.R"
 
-# Version: 0.1
-# Last update: 2023-03-13
+# Version: 0.2
+# Last update: 2023-03-24
 
 
 
@@ -25,36 +25,44 @@ library(viridis)
 
 # 0. Users settings - please check every year ----------------------------------
 
-examineYear <- "2022" # manually type here
+threshold_value <- read_excel("01_input/threshold.xlsx", sheet = "extreme") %>%   # each row in col "Test" must have unique values
+  column_to_rownames(var = "Test")
+examineYear <- threshold_value["examineYear", "Value"]                          # examine year read from threshold table now
+
 reviewfolder <- "02_test4review"
-location_keyword <- c("Burn", "Cabin", "Seed")
-temperature_Folder <- "01_input/Hourly Air Temperature"                         # the folder of cleaned hourly air temperature
+
 rain_scale_factor <- 5                                                          # for plotting
 
-# data_type Will read from excel file name. "forReview_Seed2022Campbell1.xlsx" will read data_type as Campbell - after year number and before ".xlsx"
 
-threshold_examine <- read_excel("01_input/threshold_value.xlsx", sheet = "examine") %>% # col Data is unique rownames
+threshold_examine <- read_excel("01_input/threshold.xlsx", sheet = "examine") %>% # col Data is unique rownames
   column_to_rownames(var = "Data") %>%
   mutate(
     examinestart = parse_date_time(examinestart, "%Y-%m-%d %H:%M:%S", tz = "Pacific/Pitcairn"),
     examineend = parse_date_time(examineend, "%Y-%m-%d %H:%M:%S", tz = "Pacific/Pitcairn"))
 
-GOF_date <- read_excel("01_input/threshold_value.xlsx", sheet = "GOF") %>%
+GOF_date <- read_excel("01_input/threshold.xlsx", sheet = "GOF") %>%
   column_to_rownames(var = "Location") %>%
   mutate(
     GOFstart = parse_date_time(GOFstart, "%Y-%m-%d %H:%M:%S", tz = "Pacific/Pitcairn"),
     GOFend = parse_date_time(GOFend, "%Y-%m-%d %H:%M:%S", tz = "Pacific/Pitcairn"))
 
+location_dir <- "01_input" %>%
+  list.dirs(recursive = FALSE) 
+
 
 # 1. Loop locations ------------------------------------------------------------
 
-for (location_keyword_i in location_keyword) {
-  GOFstart <- GOF_date[location_keyword_i, "GOFstart"]
-  GOFend <- GOF_date[location_keyword_i, "GOFend"]
+for (location_dir_i in location_dir) {
+  # location_dir_i <- location_dir[3]
+  location_i <- basename(location_dir_i)  
+  
+  GOFstart <- GOF_date[location_i, "GOFstart"]
+  GOFend <- GOF_date[location_i, "GOFend"]
 
+  
   # read the review data folder
   filelist <- data.frame(File = list.files(path = reviewfolder, pattern = "\\.xlsx$", full.names = TRUE)) %>%
-    filter(str_detect(File, regex(location_keyword_i, ignore_case = TRUE)))
+    filter(str_detect(File, regex(location_i, ignore_case = TRUE)))
 
   ## 1.0 loop 2 files in each location -----------------------------------------
 
@@ -66,7 +74,7 @@ for (location_keyword_i in location_keyword) {
 
   for (i in 1:nrow(filelist)) {
     file_i <- filelist$File[i]
-    data_type_i <- sub(".*\\d(.*)\\.xlsx", "\\1", file_i)
+    data_type_i <- str_extract(file_i, "(?<=\\d{4}).*(?=\\.xlsx$)")
     data_type_all[[i]] <- data_type_i 
     
     ## 1.1 if Campbell ---------------------------------------------------------
@@ -209,8 +217,13 @@ for (location_keyword_i in location_keyword) {
   
   # 2. GOF ---------------------------------------------------------------------
 
+  
+  if (nrow(filelist) == 2){
+  
+    # GOF day data
   data_day_join <- full_join(data_day[[1]], data_day[[2]], by = "date") %>%     # GOF needs 2 files for each location
-    arrange(date) %>% as.data.frame()
+    arrange(date) %>% 
+    as.data.frame()
 
   GOFtableDay <- data_day_join %>%
     filter(date >= GOFstart & date <= GOFend)
@@ -219,7 +232,38 @@ for (location_keyword_i in location_keyword) {
     t() %>%
     as.data.frame() %>%
     remove_rownames()
-
+  
+  # cold plot hour data
+  data_hr_long <- full_join(data_df_hr[[1]], data_df_hr[[2]], by = "TimestampH") %>%
+    pivot_longer(cols = -TimestampH, names_to = "data_type", values_to = "Rain_h") %>%
+    mutate(Rain_h_scaled = Rain_h * rain_scale_factor)
+  
+  # clean table for html report
+  data_hour_all <- full_join(data_df_hr[[1]], data_df_hr[[2]], by = "TimestampH") %>%
+    mutate(
+      TimestampH = as.character(TimestampH),
+      across(2:length(.), ~ ifelse(. == -1, -99, .))
+    )
+  
+  } else if (nrow(filelist) == 1){
+    
+    data_day_join <- data_day[[1]] %>%     
+      arrange(date) %>% 
+      as.data.frame()
+    
+    data_hr_long  <- data_df_hr[[1]] %>%
+      pivot_longer(cols = -TimestampH, names_to = "data_type", values_to = "Rain_h") %>%
+      mutate(Rain_h_scaled = Rain_h * rain_scale_factor)
+    
+    data_hour_all <- data_df_hr[[1]] %>%
+      mutate(
+        TimestampH = as.character(TimestampH),
+        across(2:length(.), ~ ifelse(. == -1, -99, .)))
+    
+} else {warning(paste0("forReview data is missing for location: ", location_i, ". Please check '02_test4review' folder"))}
+  
+  # --------------
+  
   data_day_long <- data_day_join %>%
     pivot_longer(cols = -date, names_to = "data_type", values_to = "Rain_day")
 
@@ -230,7 +274,7 @@ for (location_keyword_i in location_keyword) {
     ylab("Rain (mm)") +
     xlab("") +
     scale_x_date(date_breaks = "1 week", date_labels = "%b-%d") +
-    ggtitle(paste0("Daily rain ", examineYear)) +
+    ggtitle(paste0(location_i, "Daily rain ", examineYear)) +
     theme_bw() +
     theme(
       axis.text.x = element_text(angle = 45, vjust = 0.9, hjust = 1),
@@ -245,14 +289,12 @@ for (location_keyword_i in location_keyword) {
 
   # 3 cold plot --------------------------------------------
 
-  data_hr_long <- full_join(data_df_hr[[1]], data_df_hr[[2]], by = "TimestampH") %>%
-    pivot_longer(cols = -TimestampH, names_to = "data_type", values_to = "Rain_h") %>%
-    mutate(Rain_h_scaled = Rain_h * rain_scale_factor)
-
   # read in temperature data for that location, should be only one file to read
-  filelist <- data.frame(File = list.files(path = temperature_Folder, full.names = TRUE)) %>%
-    filter(str_detect(File, regex(location_keyword_i, ignore_case = TRUE)))
-  AirTemperature <- map_dfr(.x = filelist$File, .f = read_excel) %>%
+
+  filelist <- list.files(path = location_dir_i, full.names = TRUE, recursive = FALSE) %>%
+    keep(~ grepl(".xlsx$", .))
+  
+  AirTemperature <- map_dfr(.x = filelist, .f = read_excel) %>%
     mutate(Timestamp1 = parse_date_time(DateTime, "%Y-%m-%d %H:%M:%S", tz = "Pacific/Pitcairn")) %>%
     arrange(Timestamp1) %>%
     mutate(TimestampH = round(Timestamp1, units = "hours")) %>% # round not floor to hour
@@ -291,18 +333,12 @@ for (location_keyword_i in location_keyword) {
     geom_vline(xintercept = GOFstart, colour = "orange") +
     geom_vline(xintercept = GOFend, colour = "orange")
 
-  # clean table for html report
-  data_hour_all <- full_join(data_df_hr[[1]], data_df_hr[[2]], by = "TimestampH") %>%
-    mutate(
-      TimestampH = as.character(TimestampH),
-      across(2:length(.), ~ ifelse(. == -1, -99, .))
-    )
 
 
   # 4 call markdown ------------------------------------------------------------
   
   rmarkdown::render("00_scripts/03_examine.Rmd",
-    output_file = paste0(here::here(), "/03_examine/data_examine", location_keyword_i, "_", Sys.Date(), ".html"),
+    output_file = paste0(here::here(), "/03_examine/data_examine", location_i, "_", Sys.Date(), ".html"),
     envir = new.env(globalenv())
   )
 
