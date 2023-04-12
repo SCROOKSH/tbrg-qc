@@ -5,7 +5,7 @@ The project is in the very early stages of development. The codebase will be cha
 
 
 # tbrg-qc
-R workflow to be applied to tipping bucket rain gauge data to flag suspect gauge tips that may be the result of gauge malfunction or snowmelt. 
+R workflow to be applied to tipping bucket rain gauge data to flag suspect gauge tips that may be the result of gauge malfunction or snowmelt. See www folder for additional details on workflow and input file format.
 
 ## How to Contribute
 
