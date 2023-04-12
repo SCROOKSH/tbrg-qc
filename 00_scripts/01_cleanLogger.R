@@ -6,13 +6,22 @@
 #   - run tests on the cleaned event data
 #   - export the tipping bucket event data with QA test results to the 02_test4review folder
 
+
 # Version: 0.2
 # Last update: 2023-03-24
 
-
+# SC update: 2023-04-03
+#     - Section 2.4
+#         changed group_by date formatting to account for tz as.Date(format(as.POSIXct(Timestamp1), "%Y-%m-%d"))
+#     - Section 2.2
+#         changed mutate date formatting before left join(Air Temperature) to account for tz as.Date(format(as.POSIXct(Timestamp1), "%Y-%m-%d"))
+#     - Section 2.1
+#          changed mutate(m_end = m_end + days(1) - seconds(1)) to  mutate(m_end = m_end - seconds(1))
 
 
 # start here -------------------------------------------------------------------
+setwd("C:/Users/SCROOKSH/OneDrive - Government of BC/RFiles/Projects/RainQC/tbrg-qc-main")
+
 library(readr)
 library(readxl)
 library(lubridate)
@@ -137,7 +146,7 @@ for (location_dir_i in location_dir) {                                          
     missingTable <- threshold_missing %>%
       filter(Data == paste0(location_i, "_", data_type_nicename)) %>%
       select(`m_start`, `m_end`) %>%
-      mutate(m_end = m_end + days(1) - seconds(1)) %>%
+      mutate(m_end = m_end - seconds(1)) %>%
       pivot_longer(
         cols = c("m_start", "m_end"),
         names_to = "flag_missing",
@@ -183,7 +192,7 @@ for (location_dir_i in location_dir) {                                          
       ungroup() %>%
       mutate(Rain_C = "") %>%
       select(-c(Hour, floor_hour, floor_day)) %>%
-      mutate(date = as.Date(Timestamp1)) %>%
+      mutate(date = as.Date(format(as.POSIXct(Timestamp1), "%Y-%m-%d"))) %>%
       left_join(AirTemperature_sm4, by = "date") %>%
       select(-`date`) %>%
       full_join(missingTable, by = "Timestamp1") %>%
@@ -209,7 +218,7 @@ for (location_dir_i in location_dir) {                                          
 
     ## 2.4 summarise table by day ----------------------------------------------
     data_daytable <- data_mytest1 %>%
-      group_by(date = as.Date(Timestamp1)) %>%
+      group_by(date = as.Date(format(as.POSIXct(Timestamp1), "%Y-%m-%d"))) %>%
       summarize(
         Rain_day = sum(Rain_mm),
         flag_missing = ifelse(any(is.na(flag_missing)), NA, "Missing"),

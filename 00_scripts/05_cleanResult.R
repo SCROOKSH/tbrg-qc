@@ -7,6 +7,8 @@
 
 # Version: 0.2
 # Last update: 2023-03-24
+# SC update: 2023-04-06: added Storm Intensity
+
 
 
 
@@ -26,8 +28,8 @@ examineYear <- threshold_value["examineYear", "Value"]
 
 reviewfolder <- "02_test4review"
 
-threshold_examine <- read_excel("01_input/threshold.xlsx", sheet = "examine") %>% 
-  column_to_rownames(var = "Data") %>%
+threshold_examine <- read_excel("01_input/threshold.xlsx", sheet = "examine")%>%
+  column_to_rownames(var = "Data")%>% 
   mutate(
     examinestart = parse_date_time(examinestart, "%Y-%m-%d %H:%M:%S", tz = "Pacific/Pitcairn"),
     examineend = parse_date_time(examineend, "%Y-%m-%d %H:%M:%S", tz = "Pacific/Pitcairn"))
@@ -44,8 +46,7 @@ year_DateTimeM <- data.frame(DateTimeM = seq(yearStart, yearEnd, by = "5 mins"))
 filelist <- list.files(path = reviewfolder, pattern = "^[^~].*\\.xlsx$", full.names = TRUE)
 
 
-# 2. Loop locations and each data_type -----------------------------------------
-
+# 2. Loop locations and each data_type ----------------------------------------
 
 for (file_i in filelist){
 
@@ -165,16 +166,99 @@ for (file_i in filelist){
       mutate(Grade = ifelse(is.na(Grade), "Winter", Grade),
              Rain_DateTimeM = ifelse(Grade == "Missing", "NA", Rain_DateTimeM),
              Rain_DateTimeM = ifelse(Grade == "Winter", "NA", Rain_DateTimeM)) %>%
-      arrange(DateTimeM) 
-      
-
-    ## 2.4 print result --------------------------------------------------------
+      arrange(DateTimeM)
+    
+    
+    ## 2.4 Storm intensity ------------------------------------------------------
+    
+    df.event <- df_DateTimeM %>%
+      mutate(
+        Rain = Rain_DateTimeM,
+        Rain = as.numeric(Rain),
+        DateTime = DateTimeM
+      ) %>%
+      mutate(Rain = replace_na(Rain, 0)) %>%
+      select(DateTime, Rain)
+    
+    ## six hour (72 * 5 mins) rolling cumulative sum aligned right and left with True/False
+    
+    df.event <- df.event %>%
+      mutate(
+        sixhoursum_R = rollapply(Rain,
+                                 width = 72,by=1, align = "right",
+                                 FUN = sum, na.rm = TRUE, fill = NA),
+        sixhoursum_L = rollapply(Rain,
+                                 width = 72, by=1, align = "left", 
+                                 FUN = sum, na.rm = TRUE, fill = NA),
+        TF_R = ifelse(sixhoursum_R >0, "TRUE", "FALSE"),
+        TF_L = ifelse(sixhoursum_L>0, "TRUE", "FALSE"),
+        TF_all = ifelse (TF_R == "TRUE" & TF_L == "TRUE", "TRUE", "FALSE")
+      )%>%
+      mutate(TF_all = replace_na(TF_all, "FALSE")) %>%
+      select(DateTime,Rain,TF_all)
+    
+    ## Apply run length encoding (rle) to constrain storm lengths and create storm ID for each storm
+    # [rle must be applied to a vector and is challenging to use within tidyverse]
+    # StormID 0 (if present) applies to the beginning and end of the dataset, where there is not 6 hours of data before or after
+    
+    consec_precip = rle(df.event$TF_all ==TRUE)
+    storm_id = rep(0, length(df.event$TF_all))
+    storm_id[df.event$TF_all == TRUE] = rep(1:sum(consec_precip$values, na.rm="TRUE"),
+                                            times = consec_precip$lengths[consec_precip$values])
+    
+    df.event$StormID <- storm_id
+    
+    ## Calculate storm intensities
+    
+    # Define intensity function where:
+        # precip is a 5 minute precip record; 
+        # interval is the time duration in minutes for which intensity is calculated;
+        # window is interval/5
+    
+    intensity <- function(precip, interval, window) {
+      RollSum <- rollapply(precip, width = window,by=1, align = "center", FUN = sum, na.rm = TRUE, fill = NA)
+      PrecipIntensity <- RollSum * (60/interval)
+      return(PrecipIntensity)
+    }
+    
+    
+    df.event <- df.event %>%
+      mutate(
+        I10 = intensity(Rain, 10, 2),
+        I30 = intensity(Rain, 30, 6),
+        I60 = intensity(Rain, 60, 12)
+      )
+    
+    
+    ## Calculate total precipitation within each storm
+    #If time between tips is > 6 hours, but < 12 hours, then Storm ID is generated for 0 mm rain, so must delete Storms with 0 mm rain
+    
+    Stormtotals <- df.event %>%
+      group_by(StormID) %>%
+      summarise(
+        TotalPrecip = sum(Rain),
+        StartDateTime = min(DateTime),
+        EndDateTime = max(DateTime),
+        Duration_hr = difftime(max(DateTime),min(DateTime), units="hours"),
+        Duration_min = difftime(max(DateTime),min(DateTime), units="mins"),
+        I10_mmh = max(I10),
+        I30_mmh = max(I30),
+        I60_mmh = max(I60)) %>%
+      filter(StormID>0, TotalPrecip>0) %>%
+      select(-StormID)%>%
+      mutate(
+        StormNumber = seq(from = 1, to = length(TotalPrecip), by= 1))%>%
+      relocate(StormNumber, .before=TotalPrecip)
+    
+    ## 2.5 print result --------------------------------------------------------
     
     write_xlsx(
       list(
         Hour = df_hour %>% mutate(DateTimeH = as.character(DateTimeH)),
         Day = df_day %>% mutate(Date = as.character(Date)),
-        Minute5 = df_DateTimeM %>% mutate(DateTimeM = as.character(DateTimeM))
+        Minute5 = df_DateTimeM %>% mutate(DateTimeM = as.character(DateTimeM)),
+        Intensity = Stormtotals %>% mutate(StartDateTime = as.character(StartDateTime),
+                                           EndDateTime = as.character(EndDateTime))
       ),
       col_names = TRUE,
       paste0("05_cleanResult/clean_", cleanName)

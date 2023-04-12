@@ -8,6 +8,10 @@
 # Version: 0.2
 # Last update: 2023-03-24
 
+# SC updates: 2023-04-03 
+#     Section 5.2 CR10 data format: seconds data are all 00 and may have replicate tips, so need to add a random second value. 
+#                 grepl --> use examineYear instead of 'Hobo' 
+#     Section 5.2 Add tz = Pacific/Pitcairn to "#add random seconds to replica rows'
 
 
 
@@ -371,17 +375,19 @@ for (i in 1:length(filelist)) {
 
 ## 5.2 process HoBo data -------------------------------------------------------
 # HoBo seconds data are all 00. we add a random value to it
+# SC edit: And CR10 seconds data are all 00. we add a random value to it grepl(examineYear instead of 'Hobo')
+# SC edit: Add tz = Pacific/Pitcairn to "#add random seconds to replica rows'
 
 # find replica rows
 not_re_df <- df %>%
   group_by(Timestamp, file) %>%
-  mutate(n = n()) %>%
+  mutate(n = n())%>%
   filter(n == 1) %>%
   select(-n)
 
 replica_rows <- df %>%
   group_by(Timestamp, file) %>%
-  mutate(n = n()) %>%
+  mutate(n = n())%>%
   filter(n > 1) %>%
   select(-n)
 
@@ -389,11 +395,11 @@ replica_rows <- df %>%
 replica_rows_new <- replica_rows %>%
   rowwise() %>%
   mutate(
-    Timestamp = ifelse(grepl("HoBo", file) & format(Timestamp, "%S") == "00",
+    Timestamp = ifelse(grepl(examineYear, file) & format(Timestamp, "%S") == "00",
       Timestamp + runif(1, 1, 59),
       Timestamp
     ),
-    Timestamp = as.POSIXct(Timestamp, origin = "1970-01-01")
+    Timestamp = as.POSIXct(Timestamp, origin = "1970-01-01", tz = "Pacific/Pitcairn")
   ) %>%
   ungroup()
 

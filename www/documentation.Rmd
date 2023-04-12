@@ -11,86 +11,115 @@ output:
     theme: spacelab
 ---
 
-# Scope
-This project helps users to conduct quality control activities on tipping bucket rain gauge data. 
+# 1. Scope
+This project helps users conduct a quality control review of tipping bucket rain gauge data, including the identification of tips that may be from snowmelt. 
 
-> The workflow and scripts developed are tailored to be used only by the Kootenay Boundary research team within the Ministry of Forests for data coming from the West Arm Demonstration Forest tipping bucket rain gauges. Use by other projects may be possible, but generalization of the data handling systems may be required. 
+> The workflow and scripts developed are tailored to be used by the Kootenay Boundary research team within the Ministry of Forests for data coming from the West Arm Demonstration Forest tipping bucket rain gauges. Use by other projects may be possible, but generalization of the data handling systems may be required. 
   
   
-# R Project Structure
+# 2. R Project Structure
 
 The project is organized in a way to support the QAQC process for the tipping bucket rain gauge data from the West Arm Demonstration Forest.  
 
   -   **tbrg-qc.Rproj** - Double-click this file to initialize the project in RStudio.
    
   -   **00_scripts** folder:
-      +   **01_cleanLogger.R** Reads logger data from the **01_input** folder and generates Excel files in the **02_test4review** folder.  
-      +   **03_examine.R**     Reads Excel files from the **02_test4review** folder and generates HTML reports and datasets in the **03_examine** folder.  
-      +   **03_examine.Rmd**   This file is called in *03_examine.R* and contains templates for HTML reports. Please do not run this file manually.  
-      +   **04_app.R**        (This script is actually put in the project root folder.) This is a Shiny App that displays a cumulative rainfall plot. Please run this after running the *03_examine.R* script, which generates the `df_wide.Rda` data that this Shiny App uses.
-      +   **05_cleanResult.R** Reads Excel files from the **02_test4review** folder and generates final cleaned data Excel files in the **05_cleanResult** folder.  
-      +   **functions.R**      This file is referenced by other scripts. Please do not run this file directly.
-   
+      +   **01_cleanLogger.R** (or **01_cleanExcel.R**) reads logger data from the _01_input_ folder and generates Excel files in the _02_test4review_ folder.
+      +   **03_examine.R**  reads Excel files from the _02_test4review_ folder and generates HTML reports and datasets in the _03_examine_ folder.  
+      +   **03_examine.Rmd**   This file is called in `03_examine.R` and contains templates for HTML reports. Do not run this file manually.  
+      +   **04_app.R**        (This script is actually put in the project root folder.) This is a Shiny App that displays a cumulative rainfall plot. Run this app after running the `03_examine.R` script, which generates the `df_wide.Rda` data that this Shiny App uses.
+      +   **05_cleanResult.R** Reads Excel files from the _02_test4review_ folder and generates final cleaned data Excel files in the _05_cleanResult_ folder.  
+      +   **functions.R**      This file is referenced by other scripts. Do not run this file directly.
+
+&nbsp;  
+
   -   **01_input** folder:  
 ![01_input structure](input.png) 
+&nbsp;  
       -   **threshold.xlsx**    This file contains the settings for the data QAQC process, and should be checked carefully before starting the workflow. 
       -   **Location Name folder**   Each folder should be named after a location, and contains the following subfolders and files:
           -   **Temperature_anyname.xlsx** Excel file containing hourly temperature data. Each location folder should contain only one Excel file.
-          -   **Data Folder 1** Folder name should contain the keyword **Campbell** to indicate Scientific data logger data, or the keyword **HoBo** to indicate the HoBo logger data. All files in one data folder will be combined into a single output file. 
-          -   **Data Folder 2**  Same naming rules as **Data Folder 1**. 
+          -   **Data Folder 1** Folder name should contain the keyword "Campbell" to indicate Scientific data logger data, or the keyword "HoBo" to indicate the HoBo logger data. All files in one data folder will be combined into a single output file. 
+          -   **Data Folder 2**  Same naming rules as Data Folder 1. 
       If you have 2 sets of Campbell (or HoBo) data for a location, please create folders named "Campbell1" and "Campbell2" under the location folder. Then, put the .dat files from one bucket into one folder. The script will read the folder names to identify the data type.
-      If you only have 1 bucket at a location, create one data folder under the location folder. All scripts will work.
+      If you only have 1 bucket at a location, create one data folder under the location folder.
+      
+&nbsp;  
 
-  -   **02_test4review** folder: This folder contains output files that reviewers can open to review the data. Reviewers may rerun the 03_examine.R script as many times as necessary to review the data. Make sure to close all Excel files before proceeding to the next step.
+  -   **02_test4review** folder: This folder contains output files that reviewers can open to review the data. Reviewers may rerun the `03_examine.R` script as many times as necessary to review the data. Make sure to close all Excel files before proceeding to the next step.
   
-  -   **03_examine** folder: This folder contains HTML reports on the quality of the input data, generated by the 03_examine.R script.
+  -   **03_examine** folder: This folder contains HTML reports on the quality of the input data, generated by the `03_examine.R` script.
   
-  -   **05_cleanResult** folder: This folder contains the final clean result, with Excel files generated by the *05_cleanResult.R* script.
+  -   **05_cleanResult** folder: This folder contains the final clean result, with Excel files generated by the `05_cleanResult.R` script.
 
-# Workflow  
-The overall workflow, and interrelation between R scripts and folders in this solution is shown in the following figure:
+# 3. Workflow  
+The overall workflow between R scripts and folders in this solution is shown in the following figure:
   
-![Overall Data QAQC Workflow enabled with this project](workflow.png) 
+![](workflow.png) 
    
 
-# Input data formats  
+# 4. Input data formats  
   
-This section explains the format requirement for the files in the **"01_input"** folder.  
-  
-## threshold_value.xlsx  
-This Excel file has four sheets, each with a note column that explains the format requirement. Please modify the green-shaded cells for the settings.  
-  -   **extreme**   The values in this table set up the tests in folder 02_test4review.  
-  -   **GOF**   Each location should have a start time and end time for goodness-of-fit (GOF) evaluation.  
-  -   **examine**   Each location-bucket (also called data_type in the scripts) should have a start and end time indicating when the tipping rain bucket gauge was installed.  
-  -   **missing**   Copy from the table "missing data summary". Missing periods will be read in the first step - script *01_cleanLogger.R*, and can be added in the **02_test4review** Excel files. (See section [Modify missing period])  
+This section explains the format requirement for the files in the _01_input_ folder. 
 
-## Hourly Air Temperature Files
+
+### threshold_value.xlsx  
+This Excel file has four sheets, each with a note column that explains the format requirement. Please modify the green-shaded cells for the settings.  
+
+- **extreme**   The values in this table set up the tests in _02_test4review_ folder.  
+-   **GOF**   Each location should have a start time and end time for goodness-of-fit (GOF) evaluation.  
+- **examine**   Each location-bucket (also called data_type in the scripts) should have a start and end time indicating when the tipping rain bucket gauge was installed or when to disregard data because of winter-like conditions. 
+- **missing**   Missing periods will be read in the first step - script `01_cleanLogger.R`. Missing periods can also be added in the _02_test4review_ Excel files. (See section [Modify missing period]). Missing data periods should be within the examine datetime ranges specified in the previous worksheet.  
+
+### Hourly Air Temperature Files
 The file name must include the station location name.  
 Each file must have a column `DateTime` indicating the timestamp, and a column `Tair_Avg_C` indicating the temperature in degrees Celsius.  
-  
-## Raw Campbell Scientific Files  
-When the script reads in the Campbell logger data, the first three rows will be skipped. The column `Tot` will be read as the rain data. The example below shows the required format of the data files.
+
+### Rain Data Files
+
+#### a. Raw data logger files
+
+When your input files are raw data logger files, then use the `01_cleanLogger.R` and `03_examine.R` scripts. Your input files should be as follows. 
+
+  - Raw Campbell Scientific Files (CR1000/CR6 .dat files): When the script reads in the Campbell logger data, the first three rows will be skipped. The column `Tot` will be read as the rain data. The example below shows the required format of the data files.
 (R code can be found in `functions.R`, and `01_cleanLogger.R` lines 91-101.)
 
  ![Campbell data example](CampbellLogger.png)  
-  
-## Raw HoBo Files  
-When the script reads the HoBo csv data file, the first row will be skipped. The columns are renamed, and only the second and fourth columns will be selected.
+&nbsp;  
+
+  - Raw HoBo Files: When the script reads the HoBo csv data file, the first row will be skipped. The columns are renamed, and only the second and fourth columns will be selected.
 (R code can be found in `functions.R`, and `01_cleanLogger.R` line 108-117.)
 > Please clean the 1st column and 1st row as shown in the screenshot given below.
 
  ![HoBo data example](HoBoLogger.png)
+&nbsp;  
+
+#### b. Excel input files 
+
+When your input files are excel tip event files, then use the `01_cleanExcel.R` script. CR10 files can be converted to excel tip event files using the `CR10 to CR1000 dat conversion.R` script in the _data_conversion_ folder. Input files should be formatted as follows: 
+
+  - Campbell excel files should have two columns: "DateTime" ("%Y-%m-%d %H:%M") and "mm"
+
+  - HoBo excel files should have four columns: "DateTime" ("%Y-%m-%d %H:%M:%S"), "Temperature_C", "Event"and "mm"
+
 
   
-# Modify Missing Data Periods
-When you add _missing data periods_ to the Excel files in the **02_test4review** folder, please include a start and end time for each period, flagged with `m_start` and `m_end`, respectively. The rows between the start and end times should be flagged with `m` to indicate missing data.
+# 5. Data Review
+
+When missing data periods are added to the Excel files in the _02_test4review_ folder,  include a start and end time for each period, flagged with `m_start` and `m_end` in the flag_missing column. The rows between the start and end times should be flagged with `m` to indicate missing data. It is important to double check your data entry for this stage, as it is easy to enter the wrong type of flag. There is no need to delete the values in the Rain_mm column or enter anything in the Rain_C column. The final clean record will show `NA` values with a Grade of `Missing` during the missing data period.
+
+If you want to specify a m_start not associated with a tip-event (e.g. for snowmelt tips, you may want to have the missing period extend from when temperatures went below 0 degrees to the end of the snowmelt tips), then insert a sheet row, change Timestamp cell to "text" format, and enter the relevant timestamp. Enter the `m_start flag` for this new row,`m` for the subsequent snowmelt tip rows, and `m_end` for the last snowmelt tip row. 
+
+If you want to change the Rain_mm value to a different value, then enter that new value in the Rain_C column. If there is a single tip that you want to delete, you may choose to enter `0` in the Rain_C column as opposed to entering a missing data flag.
+
+You may add a `Comments` column to the `daytable` worksheet to summarize any data modifications or deletions.
    
  ![Modify missing period](MissingPeriod.png)
+  &nbsp;  
   
+### Data Review Table Column Explanation
   
-# Data Review Table Column Explanation
-  
-The table below explains the columns in the Excel files in the **02_test4review** folder.  
+The table below explains the columns in the Excel files in the _02_test4review_ folder.  
   
 <details>
 <summary> `forReview` table columns meaning (click to unfold) </summary>

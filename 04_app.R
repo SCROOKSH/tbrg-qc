@@ -20,7 +20,7 @@ slider1 <- min(as.Date(df_wide$Timestamp)-5)
 slider2 <- max(as.Date(df_wide$Timestamp)+5)
 
 # Define UI
-ui <- navbarPage(title = "Tipping rain budget data QAQC", theme = "spacelab",
+ui <- navbarPage(title = "Cumulative precip", theme = "spacelab",
                  
                  tabPanel(title = "Cumulative rain plot",
                           br(),
